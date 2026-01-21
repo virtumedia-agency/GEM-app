@@ -1,0 +1,59 @@
+name: Monthly GEM ETF Decision
+
+on:
+  schedule:
+    # Run every Monday at 08:00 UTC (09:00 CET roughly)
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run-decision-logic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check if first Monday of the month
+        id: check_date
+        run: |
+          day_of_month=$(date +%-d)
+          if [ "$day_of_month" -le 7 ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+             echo "should_run=true" >> $GITHUB_OUTPUT
+             echo "It is the first Monday (or manual dispatch)."
+          else
+             echo "should_run=false" >> $GITHUB_OUTPUT
+             echo "Not the first Monday. Skipping."
+          fi
+
+      - name: Set up Python
+        if: steps.check_date.outputs.should_run == 'true'
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        if: steps.check_date.outputs.should_run == 'true'
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run GEM Application
+        if: steps.check_date.outputs.should_run == 'true'
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: |
+          # Run from root so relative paths in main.py work
+          python app/main.py
+
+      - name: Commit and push changes
+        if: steps.check_date.outputs.should_run == 'true'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Automated report: GEM Decision [skip ci]"
+          # Commit reports, history csv, and logs
+          file_pattern: "app/reports/*.md app/decisions.csv app/logs/*.log"

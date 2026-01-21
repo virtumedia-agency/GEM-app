@@ -1,0 +1,26 @@
+# GEM ETF Decision App Configuration
+
+tickers:
+  # US Market (e.g., S&P 500)
+  US: "SPY"
+  # International Market ex-US (e.g., Vanguard FTSE All-World ex-US)
+  EXUS: "VEU"
+  # Bonds (e.g., Vanguard Total Bond Market)
+  BONDS: "BND"
+  # Cash Proxy / Risk Free Rate (e.g., SPDR Bloomberg 1-3 Month T-Bill)
+  CASH_PROXY: "BIL"
+
+strategy:
+  # Momentum lookback period in months
+  lookback_months: 12
+
+email:
+  # Sender address (Must be verified domain in Resend)
+  # For security, provided via EMAIL_FROM env var
+  from: "REPLACE_WITH_ENV_VAR"
+
+  # Recipient address
+  # For security, provided via EMAIL_TO env var
+  to: "REPLACE_WITH_ENV_VAR"
+
+  subject_prefix: "GEM ETF Decision"
