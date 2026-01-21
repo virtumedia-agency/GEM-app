@@ -55,5 +55,5 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Automated report: GEM Decision [skip ci]"
-          # Commit reports, history csv, and logs
-          file_pattern: "app/reports/*.md app/decisions.csv app/logs/*.log"
+          # Commit reports and history csv (logs are optional and caused errors)
+          file_pattern: "app/reports/*.md app/decisions.csv"
