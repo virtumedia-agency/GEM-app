@@ -19,77 +19,105 @@ class EmailSender:
             print("Skipping email send: No API Key.")
             return {"id": "skipped"}
             
-        # Convert Markdown key elements to HTML
-        html_content = content.replace('\n', '<br>')
-        html_content = html_content.replace('**', '<b>').replace('**', '</b>') # Simple bold replacement
-        html_content = html_content.replace('# ', '<h1>').replace('## ', '<h2>')
-        html_content = html_content.replace('---', '<hr>')
-        
-        # Style the table
-        if '|' in html_content:
-             # Basic table conversion (very simple, assumes correct markdown table format)
-             rows = [r for r in content.split('\n') if '|' in r]
-             table_html = '<table style="width:100%; border-collapse: collapse; margin-top: 10px;">'
-             
-             # Header
-             header_cols = [c.strip() for c in rows[0].split('|') if c.strip()]
-             table_html += '<tr style="background-color: #f2f2f2;">'
-             for hc in header_cols:
-                 table_html += f'<th style="border: 1px solid #ddd; padding: 8px; text-align: left;">{hc}</th>'
-             table_html += '</tr>'
-             
-             # Body (skipping separator row |---|)
-             for row in rows[2:]:
-                 cols = [c.strip() for c in row.split('|') if c.strip()]
-                 if cols:
-                     table_html += '<tr>'
-                     for c in cols:
-                         table_html += f'<td style="border: 1px solid #ddd; padding: 8px;">{c}</td>'
-                     table_html += '</tr>'
-             table_html += '</table>'
-             
-             # Replace the markdown table block in the content with the HTML table
-             # This is a bit tricky with simple string replace, so we construct a new body
-             # Instead, let's just make a cleaner professional HTML template using the decision logic directly if possible,
-             # but since we only have 'content' string here, let's wrap the whole thing in a nice container 
-             # and rely on the <pre> block for the parts we didn't assist.
-             pass
+        import re
 
-        # Let's use a cleaner approach: Create a nice HTML wrapper and put the text content in a pre-wrap div
-        # BUT user wants "more readable" than markdown source.
-        # Let's try to convert the provided Markdown string to basic HTML structure manually for better UX
+        # Basic Markdown to HTML converter
+        html_body = content
         
-        # Better Strategy: Render a proper HTML template
-        # Since we just have the string here, let's format it simply but nicely
+        # 1. Colors and Bolding specific keywords
+        html_body = html_body.replace("RISK-ON", "<span style='color: green; font-weight: bold;'>RISK-ON</span>")
+        html_body = html_body.replace("RISK-OFF", "<span style='color: red; font-weight: bold;'>RISK-OFF</span>")
+        html_body = html_body.replace("BUY", "<span style='color: green; font-weight: bold;'>BUY</span>")
+        html_body = html_body.replace("HOLD/SELL", "<span style='color: #d73a49; font-weight: bold;'>HOLD/SELL</span>")
+        html_body = html_body.replace("SELL", "<span style='color: red; font-weight: bold;'>SELL</span>")
+
+        # 2. Headers
+        # # Header -> <h1>Header</h1>
+        html_body = re.sub(r'^# (.+)$', r'<h1 style="color: #0366d6; font-size: 24px; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em;">\1</h1>', html_body, flags=re.MULTILINE)
+        # ## Header -> <h2>Header</h2>
+        html_body = re.sub(r'^## (.+)$', r'<h2 style="font-size: 20px; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; margin-top: 24px;">\1</h2>', html_body, flags=re.MULTILINE)
+
+        # 3. Bold (**text**)
+        html_body = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', html_body)
+
+        # 4. Horizontal Rule (---)
+        html_body = re.sub(r'^\s*---\s*$', r'<hr style="border: 0; border-top: 2px solid #eaecef; margin: 20px 0;">', html_body, flags=re.MULTILINE)
         
-        formatted_body = content.replace("RISK-ON", "<span style='color: green; font-weight: bold;'>RISK-ON</span>")
-        formatted_body = formatted_body.replace("RISK-OFF", "<span style='color: red; font-weight: bold;'>RISK-OFF</span>")
-        formatted_body = formatted_body.replace("BUY", "<span style='color: green; font-weight: bold;'>BUY</span>")
-        formatted_body = formatted_body.replace("SELL", "<span style='color: red; font-weight: bold;'>SELL</span>")
+        # 5. Lists (- Item)
+        # Replace lines starting with "- " with a styled list item span
+        html_body = re.sub(r'^-\s+(.+)$', r'<div style="margin-left: 20px; margin-bottom: 5px;">• \1</div>', html_body, flags=re.MULTILINE)
+
+        # 6. Tables
+        # This is simple/fragile parsing but works for the predictable table format in reporter.py
+        # Find the table block (lines starting with |)
+        lines = html_body.split('\n')
+        new_lines = []
+        in_table = False
         
-        # Convert newlines to breaks for the non-table parts, but keep pre-formatting for table
-        # Actually, standard <pre> tag is the safest for Markdown if we don't use a library like 'markdown'
+        table_style = 'width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 15px; font-size: 14px;'
+        th_style = 'border: 1px solid #dfe2e5; padding: 6px 13px; background-color: #f6f8fa; font-weight: bold; text-align: left;'
+        td_style = 'border: 1px solid #dfe2e5; padding: 6px 13px;'
+        
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith('|'):
+                if '---' in stripped: # Skip separator line
+                    continue
+                    
+                cols = [c.strip() for c in stripped.strip('|').split('|')]
+                
+                if not in_table:
+                    # Start of table (Header)
+                    in_table = True
+                    new_lines.append(f'<table style="{table_style}">')
+                    new_lines.append('<thead><tr>')
+                    for c in cols:
+                        new_lines.append(f'<th style="{th_style}">{c}</th>')
+                    new_lines.append('</tr></thead><tbody>')
+                else:
+                    # Table Body Row
+                    new_lines.append('<tr>')
+                    for c in cols:
+                        new_lines.append(f'<td style="{td_style}">{c}</td>')
+                    new_lines.append('</tr>')
+            else:
+                if in_table:
+                    # End of table
+                    in_table = False
+                    new_lines.append('</tbody></table>')
+                
+                # Handling empty lines for paragraph breaks in non-table content
+                if line.strip() == "":
+                    new_lines.append('<div style="height: 10px;"></div>')
+                else:
+                    # Check if line is already an HTML tag (h1, h2, hr, div list)
+                    if line.strip().startswith('<'):
+                        new_lines.append(line)
+                    else:
+                        new_lines.append(f'<div>{line}</div>')
+
+        # Close table if still open at end
+        if in_table:
+            new_lines.append('</tbody></table>')
+            
+        html_body = "\n".join(new_lines)
         
         html_content = f"""
         <!DOCTYPE html>
         <html>
         <head>
+            <meta charset="utf-8">
             <style>
-                body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; }}
+                body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #24292e; }}
                 .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .card {{ background: #ffffff; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 24px; border: 1px solid #e1e4e8; }}
-                h1 {{ color: #1a7f37; font-size: 24px; border-bottom: 2px solid #eaecef; padding-bottom: 10px; }}
-                .decision {{ font-size: 18px; background: #f6f8fa; padding: 15px; border-left: 5px solid #0366d6; margin: 20px 0; }}
-                pre {{ background: #f6f8fa; padding: 16px; border-radius: 6px; overflow: auto; font-size: 13px; }}
-                hr {{ border: 0; border-top: 1px solid #eaecef; margin: 24px 0; }}
-                .footer {{ font-size: 12px; color: #6a737d; text-align: center; margin-top: 24px; }}
+                .card {{ background: #ffffff; border-radius: 6px; border: 1px solid #e1e4e8; padding: 32px; }}
+                .footer {{ font-size: 12px; color: #586069; text-align: center; margin-top: 24px; }}
             </style>
         </head>
-        <body>
+        <body style="background-color: #f6f8fa;">
             <div class="container">
                 <div class="card">
-                    <b>Raport GEM ETF</b>
-                    <div style="white-space: pre-wrap;">{formatted_body}</div>
+                    {html_body}
                 </div>
                 <div class="footer">
                     Automated email from GEM ETF Decision App
@@ -106,6 +134,7 @@ class EmailSender:
             "text": content,
             "html": html_content
         }
+
         
         try:
             email = resend.Emails.send(params)
